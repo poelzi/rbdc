@@ -1,6 +1,6 @@
 //! String/Text type handling for Turso values.
 //!
-//! Text values in libsql map to `libsql::Value::Text(String)` and are
+//! Text values in libsql map to `turso::Value::Text(String)` and are
 //! decoded to `rbs::Value::String`, with special handling for JSON-shaped
 //! strings (matching the SQLite adapter's behavior).
 
@@ -23,8 +23,8 @@ pub fn decode_text(s: &str, json_detect: bool) -> Value {
 
 /// Encode a string to a libsql text value.
 #[inline]
-pub fn encode_text(s: String) -> libsql::Value {
-    libsql::Value::Text(s)
+pub fn encode_text(s: String) -> turso::Value {
+    turso::Value::Text(s)
 }
 
 #[cfg(test)]
@@ -90,7 +90,7 @@ mod tests {
     fn test_encode_text() {
         assert!(matches!(
             encode_text("hello".to_string()),
-            libsql::Value::Text(s) if s == "hello"
+            turso::Value::Text(s) if s == "hello"
         ));
     }
 }

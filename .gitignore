@@ -32,3 +32,4 @@ Cargo.lock
 .claude/
 
 
+rbdc-turso/target/

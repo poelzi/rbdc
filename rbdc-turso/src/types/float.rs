@@ -1,6 +1,6 @@
 //! Float type handling for Turso values.
 //!
-//! Both f32 and f64 map to `libsql::Value::Real(f64)` on the wire,
+//! Both f32 and f64 map to `turso::Value::Real(f64)` on the wire,
 //! matching SQLite's REAL storage class. The SQLite adapter decodes
 //! floats as `Value::F64`; we maintain this behavior.
 
@@ -18,14 +18,14 @@ pub fn decode_real(f: f64) -> Value {
 ///
 /// Widened to f64, matching SQLite's storage.
 #[inline]
-pub fn encode_f32(f: f32) -> libsql::Value {
-    libsql::Value::Real(f as f64)
+pub fn encode_f32(f: f32) -> turso::Value {
+    turso::Value::Real(f as f64)
 }
 
 /// Encode an f64 to a libsql real value.
 #[inline]
-pub fn encode_f64(f: f64) -> libsql::Value {
-    libsql::Value::Real(f)
+pub fn encode_f64(f: f64) -> turso::Value {
+    turso::Value::Real(f)
 }
 
 #[cfg(test)]
@@ -49,7 +49,7 @@ mod tests {
 
     #[test]
     fn test_encode_f32() {
-        if let libsql::Value::Real(f) = encode_f32(1.5f32) {
+        if let turso::Value::Real(f) = encode_f32(1.5f32) {
             assert!((f - 1.5).abs() < f64::EPSILON);
         } else {
             panic!("expected Real");
@@ -58,7 +58,7 @@ mod tests {
 
     #[test]
     fn test_encode_f64() {
-        if let libsql::Value::Real(f) = encode_f64(2.718281828) {
+        if let turso::Value::Real(f) = encode_f64(2.718281828) {
             assert!((f - 2.718281828).abs() < f64::EPSILON);
         } else {
             panic!("expected Real");

@@ -1,6 +1,6 @@
 //! Executor logic for the Turso connection.
 //!
-//! Query execution pipeline converting between `libsql` result types
+//! Query execution pipeline converting between `turso` result types
 //! and the rbdc trait types (Row, ExecResult).
 
 use crate::column::TursoColumn;
@@ -8,7 +8,7 @@ use crate::connection::TursoConnection;
 use crate::error::TursoError;
 use crate::query_result::TursoQueryResult;
 use crate::row::TursoRow;
-use crate::value::{value_to_libsql, TursoDataType, TursoValue};
+use crate::value::{value_to_turso, TursoDataType, TursoValue};
 use rbdc::db::{ExecResult, Row};
 use rbdc::error::Error;
 use rbs::Value;
@@ -21,35 +21,30 @@ impl TursoConnection {
         sql: &str,
         params: Vec<Value>,
     ) -> Result<Vec<Box<dyn Row>>, Error> {
-        let libsql_params: Vec<libsql::Value> = params
+        let turso_params: Vec<turso::Value> = params
             .iter()
-            .map(value_to_libsql)
+            .map(value_to_turso)
             .collect::<Result<Vec<_>, _>>()?;
 
         let mut rows_result = self
             .conn
-            .query(sql, libsql_params)
+            .query(sql, turso_params)
             .await
             .map_err(|e| {
                 log::warn!("turso: query failed: {}", e);
                 TursoError::from(e)
             })?;
 
-        let column_count = rows_result.column_count() as usize;
+        let column_count = rows_result.column_count();
 
-        // Build column metadata. column_type() returns libsql::ValueType
-        // directly -- no string parsing needed.
+        // Build column metadata. turso 0.5 removed column_type() from Rows,
+        // so we start with Null and refine from the first row's actual values.
         let mut columns: Vec<TursoColumn> = Vec::with_capacity(column_count);
         for i in 0..column_count {
             let name = rows_result
-                .column_name(i as i32)
-                .unwrap_or_default()
-                .to_string();
-            let type_info = rows_result
-                .column_type(i as i32)
-                .map(TursoDataType::from)
-                .unwrap_or(TursoDataType::Null);
-            columns.push(TursoColumn::new(name, i, type_info));
+                .column_name(i)
+                .unwrap_or_default();
+            columns.push(TursoColumn::new(name, i, TursoDataType::Null));
         }
         let columns = Arc::new(columns);
 
@@ -57,11 +52,11 @@ impl TursoConnection {
         while let Some(row) = rows_result.next().await.map_err(TursoError::from)? {
             let mut values = Vec::with_capacity(column_count);
             for i in 0..column_count {
-                let v = row.get_value(i as i32).map_err(TursoError::from)?;
-                // Use actual value type (more precise for dynamic typing).
-                // Fall back to declared column type for nulls.
+                let v = row.get_value(i).map_err(TursoError::from)?;
+                // Infer type from the actual value variant.
+                // Fall back to Null for null values.
                 let data_type = match &v {
-                    libsql::Value::Null => columns[i].type_info,
+                    turso::Value::Null => columns[i].type_info,
                     other => TursoDataType::from(other),
                 };
                 values.push(Some(TursoValue::with_type(v, data_type)));
@@ -81,14 +76,14 @@ impl TursoConnection {
         sql: &str,
         params: Vec<Value>,
     ) -> Result<ExecResult, Error> {
-        let libsql_params: Vec<libsql::Value> = params
+        let turso_params: Vec<turso::Value> = params
             .iter()
-            .map(value_to_libsql)
+            .map(value_to_turso)
             .collect::<Result<Vec<_>, _>>()?;
 
         let rows_affected = self
             .conn
-            .execute(sql, libsql_params)
+            .execute(sql, turso_params)
             .await
             .map_err(|e| {
                 log::warn!("turso: exec failed: {}", e);

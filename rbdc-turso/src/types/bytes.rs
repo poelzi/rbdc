@@ -1,6 +1,6 @@
 //! Blob/Bytes type handling for Turso values.
 //!
-//! Blob values in libsql map to `libsql::Value::Blob(Vec<u8>)` and are
+//! Blob values in libsql map to `turso::Value::Blob(Vec<u8>)` and are
 //! decoded to `rbs::Value::Binary(Vec<u8>)`, matching the SQLite adapter.
 
 use rbs::Value;
@@ -15,8 +15,8 @@ pub fn decode_blob(bytes: Vec<u8>) -> Value {
 
 /// Encode bytes to a libsql blob value.
 #[inline]
-pub fn encode_blob(bytes: Vec<u8>) -> libsql::Value {
-    libsql::Value::Blob(bytes)
+pub fn encode_blob(bytes: Vec<u8>) -> turso::Value {
+    turso::Value::Blob(bytes)
 }
 
 #[cfg(test)]
@@ -39,7 +39,7 @@ mod tests {
         let data = vec![1, 2, 3];
         assert!(matches!(
             encode_blob(data.clone()),
-            libsql::Value::Blob(b) if b == data
+            turso::Value::Blob(b) if b == data
         ));
     }
 }

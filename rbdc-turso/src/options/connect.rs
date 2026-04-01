@@ -14,7 +14,7 @@ impl TursoConnectOptions {
 
         let db = if self.in_memory {
             log::info!("turso: connecting to in-memory database");
-            libsql::Builder::new_local(":memory:")
+            turso::Builder::new_local(":memory:")
                 .build()
                 .await
                 .map_err(|e| {
@@ -22,22 +22,16 @@ impl TursoConnectOptions {
                     TursoError::from(e)
                 })?
         } else if self.is_remote() {
-            log::info!("turso: connecting to remote database at {}", self.url);
-            let builder = libsql::Builder::new_remote(
-                self.url.clone(),
-                self.auth_token.clone().unwrap_or_default(),
-            );
-            builder.build().await.map_err(|e| {
-                log::error!(
-                    "turso: failed to connect to remote database {}: {}",
-                    self.url,
-                    e
-                );
-                TursoError::from(e)
-            })?
+            // turso 0.5+ requires the sync feature and a different builder
+            // for remote databases. For now, remote is not supported in this
+            // adapter — use a local file path or in-memory instead.
+            return Err(TursoError::configuration(
+                "remote Turso databases require the 'sync' feature; \
+                 use a local file path or sqlite://:memory: instead"
+            ).into());
         } else {
             log::info!("turso: connecting to local database at {}", self.url);
-            libsql::Builder::new_local(&self.url)
+            turso::Builder::new_local(&self.url)
                 .build()
                 .await
                 .map_err(|e| {

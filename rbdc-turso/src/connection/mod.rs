@@ -20,8 +20,8 @@ use rbs::Value;
 /// falling back to any other backend.
 pub struct TursoConnection {
     #[allow(dead_code)]
-    pub(crate) db: libsql::Database,
-    pub(crate) conn: libsql::Connection,
+    pub(crate) db: turso::Database,
+    pub(crate) conn: turso::Connection,
     /// Whether to attempt JSON detection on TEXT values.
     pub(crate) json_detect: bool,
 }

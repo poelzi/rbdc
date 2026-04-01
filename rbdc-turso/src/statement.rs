@@ -3,7 +3,7 @@
 //! Lightweight metadata wrapper around SQL text and column info.
 //! Unlike the SQLite adapter which maintains compiled statement handles,
 //! Turso handles compilation internally via `Connection::query/execute`.
-//! Parameter counting comes from `libsql::Statement::parameter_count()`
+//! Parameter counting comes from `turso::Statement::parameter_count()`
 //! when needed, not from string parsing.
 
 use crate::column::TursoColumn;
