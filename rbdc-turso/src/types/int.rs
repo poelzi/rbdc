@@ -1,7 +1,7 @@
 //! Integer type handling for Turso values.
 //!
 //! All integer types (i8, i16, i32, i64, u8, u16, u32, u64) map to
-//! `libsql::Value::Integer(i64)` on the wire, matching SQLite's storage.
+//! `turso::Value::Integer(i64)` on the wire, matching SQLite's storage.
 //!
 //! The SQLite adapter decodes integers as `Value::I64` (from DataType::Int
 //! and DataType::Int64 both). We maintain this behavior.
@@ -19,20 +19,20 @@ pub fn decode_integer(n: i64) -> Value {
 
 /// Encode an i32 to a libsql integer value.
 #[inline]
-pub fn encode_i32(n: i32) -> libsql::Value {
-    libsql::Value::Integer(n as i64)
+pub fn encode_i32(n: i32) -> turso::Value {
+    turso::Value::Integer(n as i64)
 }
 
 /// Encode an i64 to a libsql integer value.
 #[inline]
-pub fn encode_i64(n: i64) -> libsql::Value {
-    libsql::Value::Integer(n)
+pub fn encode_i64(n: i64) -> turso::Value {
+    turso::Value::Integer(n)
 }
 
 /// Encode a u32 to a libsql integer value.
 #[inline]
-pub fn encode_u32(n: u32) -> libsql::Value {
-    libsql::Value::Integer(n as i64)
+pub fn encode_u32(n: u32) -> turso::Value {
+    turso::Value::Integer(n as i64)
 }
 
 /// Encode a u64 to a libsql integer value.
@@ -40,8 +40,8 @@ pub fn encode_u32(n: u32) -> libsql::Value {
 /// Note: values above `i64::MAX` will be truncated. This matches the
 /// SQLite adapter behavior where `(v as i64).encode(args)` is used.
 #[inline]
-pub fn encode_u64(n: u64) -> libsql::Value {
-    libsql::Value::Integer(n as i64)
+pub fn encode_u64(n: u64) -> turso::Value {
+    turso::Value::Integer(n as i64)
 }
 
 #[cfg(test)]
@@ -75,21 +75,21 @@ mod tests {
 
     #[test]
     fn test_encode_i32() {
-        assert!(matches!(encode_i32(42), libsql::Value::Integer(42)));
+        assert!(matches!(encode_i32(42), turso::Value::Integer(42)));
     }
 
     #[test]
     fn test_encode_i64() {
-        assert!(matches!(encode_i64(i64::MAX), libsql::Value::Integer(n) if n == i64::MAX));
+        assert!(matches!(encode_i64(i64::MAX), turso::Value::Integer(n) if n == i64::MAX));
     }
 
     #[test]
     fn test_encode_u32() {
-        assert!(matches!(encode_u32(100), libsql::Value::Integer(100)));
+        assert!(matches!(encode_u32(100), turso::Value::Integer(100)));
     }
 
     #[test]
     fn test_encode_u64() {
-        assert!(matches!(encode_u64(200), libsql::Value::Integer(200)));
+        assert!(matches!(encode_u64(200), turso::Value::Integer(200)));
     }
 }

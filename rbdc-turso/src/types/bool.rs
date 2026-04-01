@@ -4,7 +4,7 @@
 //! The SQLite adapter encodes booleans as `SqliteArgumentValue::Int(i32::from(b))`
 //! and decodes via `value.int() != 0`.
 //!
-//! For Turso, we use `libsql::Value::Integer` with the same 0/1 convention.
+//! For Turso, we use `turso::Value::Integer` with the same 0/1 convention.
 
 use rbs::Value;
 
@@ -20,8 +20,8 @@ pub fn decode_bool(n: i64) -> Value {
 ///
 /// `true` → `Integer(1)`, `false` → `Integer(0)`.
 #[inline]
-pub fn encode_bool(b: bool) -> libsql::Value {
-    libsql::Value::Integer(if b { 1 } else { 0 })
+pub fn encode_bool(b: bool) -> turso::Value {
+    turso::Value::Integer(if b { 1 } else { 0 })
 }
 
 #[cfg(test)]
@@ -46,11 +46,11 @@ mod tests {
 
     #[test]
     fn test_encode_true() {
-        assert!(matches!(encode_bool(true), libsql::Value::Integer(1)));
+        assert!(matches!(encode_bool(true), turso::Value::Integer(1)));
     }
 
     #[test]
     fn test_encode_false() {
-        assert!(matches!(encode_bool(false), libsql::Value::Integer(0)));
+        assert!(matches!(encode_bool(false), turso::Value::Integer(0)));
     }
 }
