@@ -31,6 +31,7 @@ pub mod driver;
 pub mod error;
 pub mod options;
 pub mod query_result;
+mod retry;
 pub mod row;
 pub mod statement;
 pub mod types;

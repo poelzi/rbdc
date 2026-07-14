@@ -50,6 +50,7 @@ impl TursoConnectOptions {
             db,
             conn,
             json_detect: self.json_detect,
+            tx_depth: 0,
         })
     }
 }
