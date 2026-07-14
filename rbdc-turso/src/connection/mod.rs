@@ -24,6 +24,12 @@ pub struct TursoConnection {
     pub(crate) conn: turso::Connection,
     /// Whether to attempt JSON detection on TEXT values.
     pub(crate) json_detect: bool,
+    /// Application transaction nesting depth, tracked by sniffing
+    /// `BEGIN`/`COMMIT`/`ROLLBACK` (and savepoints) as they pass through
+    /// `exec`. Autocommit (depth 0) statements are eligible for automatic
+    /// retry on transient write conflicts; statements inside an explicit
+    /// transaction are not (the caller must replay the whole transaction).
+    pub(crate) tx_depth: u32,
 }
 
 impl std::fmt::Debug for TursoConnection {
