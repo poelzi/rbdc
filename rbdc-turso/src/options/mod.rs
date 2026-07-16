@@ -5,6 +5,9 @@ use futures_core::future::BoxFuture;
 use rbdc::db::{ConnectOptions, Connection};
 use rbdc::Error;
 use std::str::FromStr;
+use std::time::Duration;
+
+const DEFAULT_BUSY_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// Options for connecting to a Turso/libSQL database.
 ///
@@ -51,6 +54,9 @@ pub struct TursoConnectOptions {
     /// This is opt-in because the heuristic can cause data loss: the TEXT
     /// string `"null"` becomes indistinguishable from SQL NULL.
     pub(crate) json_detect: bool,
+
+    /// Maximum time Turso waits for a competing writer to release the lock.
+    pub(crate) busy_timeout: Duration,
 }
 
 impl Default for TursoConnectOptions {
@@ -67,6 +73,7 @@ impl TursoConnectOptions {
             auth_token: None,
             in_memory: true,
             json_detect: false,
+            busy_timeout: DEFAULT_BUSY_TIMEOUT,
         }
     }
 
@@ -109,6 +116,17 @@ impl TursoConnectOptions {
     /// Returns whether JSON detection is enabled.
     pub fn is_json_detect(&self) -> bool {
         self.json_detect
+    }
+
+    /// Set the accumulated busy wait applied to every created connection.
+    pub fn busy_timeout(mut self, timeout: Duration) -> Self {
+        self.busy_timeout = timeout;
+        self
+    }
+
+    /// Return the configured per-connection busy wait.
+    pub fn get_busy_timeout(&self) -> Duration {
+        self.busy_timeout
     }
 
     /// Returns whether this configuration targets a remote Turso endpoint.
@@ -188,6 +206,7 @@ impl FromStr for TursoConnectOptions {
         let mut explicit_url: Option<String> = None;
         let mut token: Option<String> = None;
         let mut json_detect: Option<bool> = None;
+        let mut busy_timeout: Option<Duration> = None;
 
         if let Some(params) = query_part {
             for (key, value) in url::form_urlencoded::parse(params.as_bytes()) {
@@ -200,6 +219,14 @@ impl FromStr for TursoConnectOptions {
                     }
                     "json_detect" => {
                         json_detect = Some(matches!(&*value, "true" | "1"));
+                    }
+                    "busy_timeout_ms" => {
+                        let millis = value.parse::<u64>().map_err(|_| {
+                            Error::from(format!(
+                                "turso configuration: invalid busy_timeout_ms `{value}`"
+                            ))
+                        })?;
+                        busy_timeout = Some(Duration::from_millis(millis));
                     }
                     _ => {
                         return Err(Error::from(format!(
@@ -225,6 +252,7 @@ impl FromStr for TursoConnectOptions {
         options.in_memory = options.url == ":memory:";
         options.auth_token = token;
         options.json_detect = json_detect.unwrap_or(false);
+        options.busy_timeout = busy_timeout.unwrap_or(DEFAULT_BUSY_TIMEOUT);
 
         Ok(options)
     }
@@ -263,8 +291,9 @@ mod tests {
 
     #[test]
     fn parse_turso_scheme_with_url_and_token() {
-        let opts: TursoConnectOptions =
-            "turso://?url=libsql://mydb.turso.io&token=secret".parse().unwrap();
+        let opts: TursoConnectOptions = "turso://?url=libsql://mydb.turso.io&token=secret"
+            .parse()
+            .unwrap();
         assert_eq!(opts.url, "libsql://mydb.turso.io");
         assert_eq!(opts.auth_token.as_deref(), Some("secret"));
         assert!(opts.is_remote());
@@ -309,16 +338,14 @@ mod tests {
 
     #[test]
     fn parse_json_detect_enabled() {
-        let opts: TursoConnectOptions =
-            "turso://:memory:?json_detect=true".parse().unwrap();
+        let opts: TursoConnectOptions = "turso://:memory:?json_detect=true".parse().unwrap();
         assert!(opts.is_json_detect());
         assert!(opts.is_in_memory());
     }
 
     #[test]
     fn parse_json_detect_disabled_explicitly() {
-        let opts: TursoConnectOptions =
-            "turso://:memory:?json_detect=false".parse().unwrap();
+        let opts: TursoConnectOptions = "turso://:memory:?json_detect=false".parse().unwrap();
         assert!(!opts.is_json_detect());
     }
 
@@ -326,6 +353,20 @@ mod tests {
     fn parse_json_detect_default_off() {
         let opts: TursoConnectOptions = "turso://:memory:".parse().unwrap();
         assert!(!opts.is_json_detect());
+    }
+
+    #[test]
+    fn parse_busy_timeout() {
+        let opts: TursoConnectOptions = "turso://:memory:?busy_timeout_ms=250".parse().unwrap();
+        assert_eq!(opts.get_busy_timeout(), Duration::from_millis(250));
+    }
+
+    #[test]
+    fn parse_rejects_invalid_busy_timeout() {
+        let result: Result<TursoConnectOptions, _> =
+            "turso://:memory:?busy_timeout_ms=slow".parse();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("busy_timeout_ms"));
     }
 
     #[test]
@@ -356,6 +397,12 @@ mod tests {
 
         let opts = TursoConnectOptions::new().json_detect(false);
         assert!(!opts.is_json_detect());
+    }
+
+    #[test]
+    fn builder_busy_timeout() {
+        let opts = TursoConnectOptions::new().busy_timeout(Duration::from_secs(2));
+        assert_eq!(opts.get_busy_timeout(), Duration::from_secs(2));
     }
 }
 
