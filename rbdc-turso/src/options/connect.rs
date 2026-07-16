@@ -27,8 +27,9 @@ impl TursoConnectOptions {
             // adapter — use a local file path or in-memory instead.
             return Err(TursoError::configuration(
                 "remote Turso databases require the 'sync' feature; \
-                 use a local file path or sqlite://:memory: instead"
-            ).into());
+                 use a local file path or sqlite://:memory: instead",
+            )
+            .into());
         } else {
             log::info!("turso: connecting to local database at {}", self.url);
             turso::Builder::new_local(&self.url)
@@ -42,6 +43,10 @@ impl TursoConnectOptions {
 
         let conn = db.connect().map_err(|e| {
             log::error!("turso: failed to obtain connection handle: {}", e);
+            TursoError::from(e)
+        })?;
+        conn.busy_timeout(self.busy_timeout).map_err(|e| {
+            log::error!("turso: failed to configure connection busy timeout: {}", e);
             TursoError::from(e)
         })?;
 

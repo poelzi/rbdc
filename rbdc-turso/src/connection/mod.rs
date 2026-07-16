@@ -59,6 +59,13 @@ impl Connection for TursoConnection {
         Box::pin(async move { self.execute_exec(&sql, params).await })
     }
 
+    fn begin(&mut self) -> BoxFuture<'_, Result<(), Error>> {
+        Box::pin(async move {
+            self.execute_exec("BEGIN IMMEDIATE", vec![]).await?;
+            Ok(())
+        })
+    }
+
     fn close(&mut self) -> BoxFuture<'_, Result<(), Error>> {
         Box::pin(async { Ok(()) })
     }
