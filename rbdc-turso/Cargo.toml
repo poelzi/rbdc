@@ -16,6 +16,13 @@ homepage = "https://rbatis.github.io/rbatis.io"
 default = ["tls-rustls"]
 tls-rustls = ["rbdc/tls-rustls"]
 tls-native-tls = ["rbdc/tls-native-tls"]
+## Let turso install mimalloc as the process-wide `#[global_allocator]`.
+## Off by default: a database driver should not pick the allocator for the
+## binary that links it. Enabling it blocks any other `#[global_allocator]`
+## (e.g. jemalloc built for heap profiling) and hides Rust allocations from
+## malloc-interposing profilers, because turso links mimalloc without the C
+## `malloc` override.
+mimalloc = ["turso/mimalloc"]
 
 [dependencies]
 rbs = { version = "4" }
@@ -24,7 +31,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 log = "0.4"
 url = { version = "2.2.2", default-features = false }
-turso = "0.5"
+turso = { version = "0.5", default-features = false }
 tokio = { version = "1", features = ["sync", "rt", "time"] }
 futures-core = { version = "0.3.19", default-features = false }
 
