@@ -98,10 +98,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_libsql_variant_source_and_message() {
-        let db = turso::Builder::new_local(":memory:")
-            .build()
-            .await
-            .unwrap();
+        let db = turso::Builder::new_local(":memory:").build().await.unwrap();
         let conn = db.connect().unwrap();
 
         let libsql_err = conn.execute("NOT VALID SQL", ()).await.unwrap_err();
@@ -111,7 +108,11 @@ mod tests {
         assert!(err.is_unavailable());
         // turso 0.5 may phrase the error differently from libsql 0.9;
         // just verify we got a non-empty error message.
-        assert!(!err.message().is_empty(), "expected non-empty error, got: {:?}", err.message());
+        assert!(
+            !err.message().is_empty(),
+            "expected non-empty error, got: {:?}",
+            err.message()
+        );
         assert!(StdError::source(&err).is_some());
         assert!(err.to_string().starts_with("turso error:"));
     }

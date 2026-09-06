@@ -72,7 +72,8 @@ impl TursoConnection {
         sql: &str,
         turso_params: Vec<turso::Value>,
     ) -> Result<Vec<Box<dyn Row>>, turso::Error> {
-        let mut rows_result = self.conn.query(sql, turso_params).await?;
+        let mut stmt = self.conn.prepare_cached(sql).await?;
+        let mut rows_result = stmt.query(turso_params).await?;
 
         let column_count = rows_result.column_count();
 
@@ -127,7 +128,7 @@ impl TursoConnection {
                 .iter()
                 .map(value_to_turso)
                 .collect::<Result<Vec<_>, _>>()?;
-            match self.conn.execute(sql, turso_params).await {
+            match self.execute_once(sql, turso_params).await {
                 Ok(rows_affected) => break Ok(rows_affected),
                 Err(e) => {
                     if allow_retry && attempt < MAX_RETRIES && is_retryable(&e) {
@@ -156,6 +157,25 @@ impl TursoConnection {
                 Err(TursoError::from(e).into())
             }
         }
+    }
+
+    /// Run a single non-SELECT statement, returning the raw [`turso::Error`] on
+    /// failure so the caller can classify retryability.
+    ///
+    /// Goes through `prepare_cached` rather than `Connection::execute` so the
+    /// compiled program is reused instead of the SQL being re-parsed and
+    /// re-planned on every call. The one thing `Connection::execute` adds is
+    /// `maybe_handle_dangling_tx`, which only ever fires for a dropped
+    /// `turso::Transaction`; this adapter drives transactions with literal
+    /// `BEGIN`/`COMMIT` statements and never constructs one, so there is
+    /// nothing for it to clean up.
+    async fn execute_once(
+        &self,
+        sql: &str,
+        turso_params: Vec<turso::Value>,
+    ) -> Result<u64, turso::Error> {
+        let mut stmt = self.conn.prepare_cached(sql).await?;
+        stmt.execute(turso_params).await
     }
 
     /// Update the tracked transaction nesting depth after a statement runs.

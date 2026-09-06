@@ -49,6 +49,15 @@ impl TursoConnectOptions {
             log::error!("turso: failed to configure connection busy timeout: {}", e);
             TursoError::from(e)
         })?;
+        // Session PRAGMAs do not propagate between connections. Applying them
+        // here is the only way a pool gets them on all of its connections
+        // rather than on whichever one an application-issued PRAGMA landed on.
+        for pragma in self.session_pragmas() {
+            conn.execute(&pragma, ()).await.map_err(|e| {
+                log::error!("turso: failed to apply `{}`: {}", pragma, e);
+                TursoError::from(e)
+            })?;
+        }
 
         log::debug!("turso: connection established successfully");
         Ok(TursoConnection {
