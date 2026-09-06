@@ -42,7 +42,7 @@ pub use connection::TursoConnection;
 pub use driver::TursoDriver;
 pub use driver::TursoDriver as Driver;
 pub use error::TursoError;
-pub use options::TursoConnectOptions;
+pub use options::{Synchronous, TursoConnectOptions};
 pub use query_result::TursoQueryResult;
 pub use row::{TursoMetaData, TursoRow};
 pub use statement::TursoStatement;

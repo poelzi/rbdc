@@ -57,6 +57,54 @@ pub struct TursoConnectOptions {
 
     /// Maximum time Turso waits for a competing writer to release the lock.
     pub(crate) busy_timeout: Duration,
+
+    /// `PRAGMA synchronous` for every connection.
+    ///
+    /// Turso starts each connection at `FULL`, i.e. an fsync per commit. In WAL
+    /// mode `NORMAL` is still crash-safe and far cheaper, but it is session
+    /// state: setting it through a pool configures exactly one connection and
+    /// silently leaves the rest fsyncing.
+    pub(crate) synchronous: Option<Synchronous>,
+
+    /// `PRAGMA cache_size` for every connection, in turso's own units
+    /// (negative = KiB, positive = pages). Also session state.
+    pub(crate) cache_size: Option<i64>,
+
+    /// `PRAGMA foreign_keys` for every connection. Also session state.
+    pub(crate) foreign_keys: Option<bool>,
+}
+
+/// `PRAGMA synchronous` levels.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Synchronous {
+    Off,
+    Normal,
+    Full,
+}
+
+impl Synchronous {
+    fn as_pragma_value(self) -> &'static str {
+        match self {
+            Synchronous::Off => "OFF",
+            Synchronous::Normal => "NORMAL",
+            Synchronous::Full => "FULL",
+        }
+    }
+}
+
+impl FromStr for Synchronous {
+    type Err = Error;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value.to_ascii_lowercase().as_str() {
+            "off" | "0" => Ok(Synchronous::Off),
+            "normal" | "1" => Ok(Synchronous::Normal),
+            "full" | "2" => Ok(Synchronous::Full),
+            other => Err(Error::from(format!(
+                "turso configuration: invalid synchronous `{other}`, expected off/normal/full"
+            ))),
+        }
+    }
 }
 
 impl Default for TursoConnectOptions {
@@ -74,6 +122,9 @@ impl TursoConnectOptions {
             in_memory: true,
             json_detect: false,
             busy_timeout: DEFAULT_BUSY_TIMEOUT,
+            synchronous: None,
+            cache_size: None,
+            foreign_keys: None,
         }
     }
 
@@ -127,6 +178,42 @@ impl TursoConnectOptions {
     /// Return the configured per-connection busy wait.
     pub fn get_busy_timeout(&self) -> Duration {
         self.busy_timeout
+    }
+
+    /// Set `PRAGMA synchronous` for every created connection.
+    pub fn synchronous(mut self, mode: Synchronous) -> Self {
+        self.synchronous = Some(mode);
+        self
+    }
+
+    /// Set `PRAGMA cache_size` for every created connection.
+    pub fn cache_size(mut self, size: i64) -> Self {
+        self.cache_size = Some(size);
+        self
+    }
+
+    /// Set `PRAGMA foreign_keys` for every created connection.
+    pub fn foreign_keys(mut self, enabled: bool) -> Self {
+        self.foreign_keys = Some(enabled);
+        self
+    }
+
+    /// The session PRAGMAs to replay on each new connection, in order.
+    pub(crate) fn session_pragmas(&self) -> Vec<String> {
+        let mut pragmas = Vec::new();
+        if let Some(mode) = self.synchronous {
+            pragmas.push(format!("PRAGMA synchronous={}", mode.as_pragma_value()));
+        }
+        if let Some(size) = self.cache_size {
+            pragmas.push(format!("PRAGMA cache_size={size}"));
+        }
+        if let Some(enabled) = self.foreign_keys {
+            pragmas.push(format!(
+                "PRAGMA foreign_keys={}",
+                if enabled { "ON" } else { "OFF" }
+            ));
+        }
+        pragmas
     }
 
     /// Returns whether this configuration targets a remote Turso endpoint.
@@ -207,6 +294,9 @@ impl FromStr for TursoConnectOptions {
         let mut token: Option<String> = None;
         let mut json_detect: Option<bool> = None;
         let mut busy_timeout: Option<Duration> = None;
+        let mut synchronous: Option<Synchronous> = None;
+        let mut cache_size: Option<i64> = None;
+        let mut foreign_keys: Option<bool> = None;
 
         if let Some(params) = query_part {
             for (key, value) in url::form_urlencoded::parse(params.as_bytes()) {
@@ -227,6 +317,19 @@ impl FromStr for TursoConnectOptions {
                             ))
                         })?;
                         busy_timeout = Some(Duration::from_millis(millis));
+                    }
+                    "synchronous" => {
+                        synchronous = Some(value.parse::<Synchronous>()?);
+                    }
+                    "cache_size" => {
+                        cache_size = Some(value.parse::<i64>().map_err(|_| {
+                            Error::from(format!(
+                                "turso configuration: invalid cache_size `{value}`"
+                            ))
+                        })?);
+                    }
+                    "foreign_keys" => {
+                        foreign_keys = Some(matches!(&*value, "true" | "1" | "on" | "ON"));
                     }
                     _ => {
                         return Err(Error::from(format!(
@@ -253,6 +356,9 @@ impl FromStr for TursoConnectOptions {
         options.auth_token = token;
         options.json_detect = json_detect.unwrap_or(false);
         options.busy_timeout = busy_timeout.unwrap_or(DEFAULT_BUSY_TIMEOUT);
+        options.synchronous = synchronous;
+        options.cache_size = cache_size;
+        options.foreign_keys = foreign_keys;
 
         Ok(options)
     }
@@ -403,6 +509,50 @@ mod tests {
     fn builder_busy_timeout() {
         let opts = TursoConnectOptions::new().busy_timeout(Duration::from_secs(2));
         assert_eq!(opts.get_busy_timeout(), Duration::from_secs(2));
+    }
+
+    #[test]
+    fn session_pragmas_are_empty_unless_configured() {
+        assert!(TursoConnectOptions::new().session_pragmas().is_empty());
+    }
+
+    #[test]
+    fn session_pragmas_render_in_a_stable_order() {
+        let opts = TursoConnectOptions::new()
+            .synchronous(Synchronous::Normal)
+            .cache_size(-65536)
+            .foreign_keys(true);
+        assert_eq!(
+            opts.session_pragmas(),
+            vec![
+                "PRAGMA synchronous=NORMAL".to_string(),
+                "PRAGMA cache_size=-65536".to_string(),
+                "PRAGMA foreign_keys=ON".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_reads_session_pragmas_from_query_params() {
+        let opts: TursoConnectOptions =
+            "sqlite://db.sqlite?synchronous=normal&cache_size=-65536&foreign_keys=true"
+                .parse()
+                .unwrap();
+        assert_eq!(opts.synchronous, Some(Synchronous::Normal));
+        assert_eq!(opts.cache_size, Some(-65536));
+        assert_eq!(opts.foreign_keys, Some(true));
+    }
+
+    #[test]
+    fn parse_accepts_numeric_synchronous_and_rejects_nonsense() {
+        let opts: TursoConnectOptions = "sqlite://db.sqlite?synchronous=2".parse().unwrap();
+        assert_eq!(opts.synchronous, Some(Synchronous::Full));
+        assert!("sqlite://db.sqlite?synchronous=sometimes"
+            .parse::<TursoConnectOptions>()
+            .is_err());
+        assert!("sqlite://db.sqlite?cache_size=lots"
+            .parse::<TursoConnectOptions>()
+            .is_err());
     }
 }
 

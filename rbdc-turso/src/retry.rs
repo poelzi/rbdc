@@ -112,7 +112,9 @@ mod tests {
 
     #[test]
     fn busy_and_snapshot_are_retryable_nothing_else() {
-        assert!(is_retryable(&turso::Error::Busy("database is locked".into())));
+        assert!(is_retryable(&turso::Error::Busy(
+            "database is locked".into()
+        )));
         assert!(is_retryable(&turso::Error::BusySnapshot(
             "database snapshot is stale, rollback and retry the transaction".into()
         )));

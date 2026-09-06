@@ -20,10 +20,8 @@ async fn connect(url: &str) -> Box<dyn Connection> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
 async fn concurrent_autocommit_inserts_converge() {
-    let path = std::env::temp_dir().join(format!(
-        "rbdc-turso-concurrent-{}.db",
-        std::process::id()
-    ));
+    let path =
+        std::env::temp_dir().join(format!("rbdc-turso-concurrent-{}.db", std::process::id()));
     let _ = std::fs::remove_file(&path);
     let url = format!("sqlite://{}", path.display());
 
@@ -80,7 +78,12 @@ async fn concurrent_autocommit_inserts_converge() {
         .get_rows("SELECT seq FROM items WHERE room = 'r'", vec![])
         .await
         .expect("count rows");
-    assert_eq!(rows.len(), N, "expected {N} distinct rows, got {}", rows.len());
+    assert_eq!(
+        rows.len(),
+        N,
+        "expected {N} distinct rows, got {}",
+        rows.len()
+    );
 
     let _ = std::fs::remove_file(&path);
 }
