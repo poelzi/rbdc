@@ -72,6 +72,11 @@ pub struct TursoConnectOptions {
 
     /// `PRAGMA foreign_keys` for every connection. Also session state.
     pub(crate) foreign_keys: Option<bool>,
+
+    /// `BEGIN`/`COMMIT`/`ROLLBACK` statements at or above this duration are
+    /// reported at WARN. They wait on the write lock and pay inline WAL
+    /// checkpoints, and run outside rbatis' statement interceptors.
+    pub(crate) slow_tx_threshold: Option<Duration>,
 }
 
 /// `PRAGMA synchronous` levels.
@@ -125,6 +130,7 @@ impl TursoConnectOptions {
             synchronous: None,
             cache_size: None,
             foreign_keys: None,
+            slow_tx_threshold: None,
         }
     }
 
@@ -195,6 +201,12 @@ impl TursoConnectOptions {
     /// Set `PRAGMA foreign_keys` for every created connection.
     pub fn foreign_keys(mut self, enabled: bool) -> Self {
         self.foreign_keys = Some(enabled);
+        self
+    }
+
+    /// Report transaction-control statements at or above `threshold`.
+    pub fn slow_tx_threshold(mut self, threshold: Duration) -> Self {
+        self.slow_tx_threshold = Some(threshold);
         self
     }
 
@@ -297,6 +309,7 @@ impl FromStr for TursoConnectOptions {
         let mut synchronous: Option<Synchronous> = None;
         let mut cache_size: Option<i64> = None;
         let mut foreign_keys: Option<bool> = None;
+        let mut slow_tx_threshold: Option<Duration> = None;
 
         if let Some(params) = query_part {
             for (key, value) in url::form_urlencoded::parse(params.as_bytes()) {
@@ -331,6 +344,14 @@ impl FromStr for TursoConnectOptions {
                     "foreign_keys" => {
                         foreign_keys = Some(matches!(&*value, "true" | "1" | "on" | "ON"));
                     }
+                    "slow_tx_threshold_ms" => {
+                        let millis = value.parse::<u64>().map_err(|_| {
+                            Error::from(format!(
+                                "turso configuration: invalid slow_tx_threshold_ms `{value}`"
+                            ))
+                        })?;
+                        slow_tx_threshold = (millis > 0).then(|| Duration::from_millis(millis));
+                    }
                     _ => {
                         return Err(Error::from(format!(
                             "turso configuration: unknown query parameter `{}`",
@@ -359,6 +380,7 @@ impl FromStr for TursoConnectOptions {
         options.synchronous = synchronous;
         options.cache_size = cache_size;
         options.foreign_keys = foreign_keys;
+        options.slow_tx_threshold = slow_tx_threshold;
 
         Ok(options)
     }
@@ -565,6 +587,22 @@ mod tests {
             .parse::<TursoConnectOptions>()
             .is_err());
         assert!("sqlite://db.sqlite?cache_size=lots"
+            .parse::<TursoConnectOptions>()
+            .is_err());
+    }
+
+    #[test]
+    fn parse_slow_tx_threshold() {
+        let options: TursoConnectOptions = "sqlite://db.sqlite?slow_tx_threshold_ms=250"
+            .parse()
+            .unwrap();
+        assert_eq!(options.slow_tx_threshold, Some(Duration::from_millis(250)));
+
+        let disabled: TursoConnectOptions =
+            "sqlite://db.sqlite?slow_tx_threshold_ms=0".parse().unwrap();
+        assert_eq!(disabled.slow_tx_threshold, None);
+
+        assert!("sqlite://db.sqlite?slow_tx_threshold_ms=soon"
             .parse::<TursoConnectOptions>()
             .is_err());
     }

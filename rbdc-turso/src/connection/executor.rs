@@ -121,6 +121,7 @@ impl TursoConnection {
     ) -> Result<ExecResult, Error> {
         let tx_control = classify_tx(sql);
         let allow_retry = self.tx_depth == 0;
+        let started = std::time::Instant::now();
 
         let mut attempt: u32 = 0;
         let outcome = loop {
@@ -146,6 +147,9 @@ impl TursoConnection {
         };
 
         self.apply_tx_control(tx_control, outcome.is_ok());
+        if tx_control != TxControl::None {
+            self.report_slow_tx_control(sql, started.elapsed(), outcome.is_ok());
+        }
 
         match outcome {
             Ok(rows_affected) => {
@@ -183,6 +187,27 @@ impl TursoConnection {
     /// A `BEGIN`/`SAVEPOINT` only counts once it actually succeeded; a
     /// `COMMIT`/`ROLLBACK` always steps the depth down because it ends the
     /// transaction even when it fails (a failed commit aborts).
+    fn report_slow_tx_control(&self, sql: &str, elapsed: std::time::Duration, succeeded: bool) {
+        let Some(threshold) = self.slow_tx_threshold else {
+            return;
+        };
+        if elapsed < threshold {
+            return;
+        }
+        let statement = sql
+            .split_whitespace()
+            .next()
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        tracing::warn!(
+            target: "rbdc_turso::transaction",
+            statement = %statement,
+            elapsed_ms = elapsed.as_millis() as u64,
+            succeeded,
+            "slow transaction control statement"
+        );
+    }
+
     fn apply_tx_control(&mut self, control: TxControl, succeeded: bool) {
         match control {
             TxControl::Begin => {

@@ -32,6 +32,8 @@ pub struct TursoConnection {
     /// retry on transient write conflicts; statements inside an explicit
     /// transaction are not (the caller must replay the whole transaction).
     pub(crate) tx_depth: u32,
+    /// See [`crate::TursoConnectOptions::slow_tx_threshold`].
+    pub(crate) slow_tx_threshold: Option<std::time::Duration>,
 }
 
 impl std::fmt::Debug for TursoConnection {
