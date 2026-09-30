@@ -34,7 +34,7 @@ mod tests {
 
     #[test]
     fn test_decode_real() {
-        assert_eq!(decode_real(3.14), Value::F64(3.14));
+        assert_eq!(decode_real(1.5), Value::F64(1.5));
     }
 
     #[test]
@@ -58,8 +58,8 @@ mod tests {
 
     #[test]
     fn test_encode_f64() {
-        if let turso::Value::Real(f) = encode_f64(2.718281828) {
-            assert!((f - 2.718281828).abs() < f64::EPSILON);
+        if let turso::Value::Real(f) = encode_f64(1.25) {
+            assert!((f - 1.25).abs() < f64::EPSILON);
         } else {
             panic!("expected Real");
         }

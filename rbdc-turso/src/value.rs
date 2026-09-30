@@ -243,9 +243,9 @@ mod tests {
 
     #[test]
     fn test_real_roundtrip() {
-        let tv = TursoValue::new(turso::Value::Real(3.14));
+        let tv = TursoValue::new(turso::Value::Real(1.5));
         assert_eq!(tv.data_type(), TursoDataType::Real);
-        assert_eq!(turso_value_to_rbs(&tv, false), Value::F64(3.14));
+        assert_eq!(turso_value_to_rbs(&tv, false), Value::F64(1.5));
     }
 
     #[test]

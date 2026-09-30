@@ -260,18 +260,18 @@ impl FromStr for TursoConnectOptions {
         let mut options = Self::new();
 
         // Strip scheme prefix with strict validation
-        let rest = if uri.starts_with("turso://") {
-            &uri["turso://".len()..]
+        let rest = if let Some(rest) = uri.strip_prefix("turso://") {
+            rest
         } else if uri.starts_with("turso:") {
             return Err(Error::from(
                 "turso configuration: invalid URI scheme `turso:`, expected `turso://`",
             ));
-        } else if uri.starts_with("sqlite://") {
+        } else if let Some(rest) = uri.strip_prefix("sqlite://") {
             // Accept sqlite:// for backward compatibility with rbdc-sqlite URLs
-            &uri["sqlite://".len()..]
-        } else if uri.starts_with("sqlite:") {
+            rest
+        } else if let Some(rest) = uri.strip_prefix("sqlite:") {
             // Accept sqlite: (without //) for config compatibility (e.g. "sqlite:/path/to/db")
-            &uri["sqlite:".len()..]
+            rest
         } else {
             // No scheme prefix — treat as bare path/URL
             uri
@@ -361,6 +361,20 @@ impl FromStr for TursoConnectOptions {
         options.foreign_keys = foreign_keys;
 
         Ok(options)
+    }
+}
+
+impl ConnectOptions for TursoConnectOptions {
+    fn connect(&self) -> BoxFuture<'_, Result<Box<dyn Connection>, Error>> {
+        Box::pin(async move {
+            let conn = self.connect_turso().await?;
+            Ok(Box::new(conn) as Box<dyn Connection>)
+        })
+    }
+
+    fn set_uri(&mut self, uri: &str) -> Result<(), Error> {
+        *self = TursoConnectOptions::from_str(uri).map_err(|e| Error::from(e.to_string()))?;
+        Ok(())
     }
 }
 
@@ -553,19 +567,5 @@ mod tests {
         assert!("sqlite://db.sqlite?cache_size=lots"
             .parse::<TursoConnectOptions>()
             .is_err());
-    }
-}
-
-impl ConnectOptions for TursoConnectOptions {
-    fn connect(&self) -> BoxFuture<'_, Result<Box<dyn Connection>, Error>> {
-        Box::pin(async move {
-            let conn = self.connect_turso().await?;
-            Ok(Box::new(conn) as Box<dyn Connection>)
-        })
-    }
-
-    fn set_uri(&mut self, uri: &str) -> Result<(), Error> {
-        *self = TursoConnectOptions::from_str(uri).map_err(|e| Error::from(e.to_string()))?;
-        Ok(())
     }
 }

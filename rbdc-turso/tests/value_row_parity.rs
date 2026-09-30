@@ -118,7 +118,7 @@ async fn par_003_real_values() {
 
     let cases: Vec<(f64, &str)> = vec![
         (0.0, "zero"),
-        (3.14, "pi"),
+        (std::f64::consts::PI, "pi"),
         (-1.5, "negative"),
         (1e300, "large"),
         (1e-300, "tiny"),
@@ -660,7 +660,7 @@ async fn par_012_mixed_types_single_row() {
         "INSERT INTO par012 VALUES (?, ?, ?, ?, ?)",
         vec![
             Value::I64(42),
-            Value::F64(2.718),
+            Value::F64(2.75),
             Value::String("hello".into()),
             Value::Binary(vec![0xFF]),
             Value::Null,
@@ -695,7 +695,7 @@ async fn par_012_mixed_types_single_row() {
 
     let r = rows[0].get(1).unwrap();
     match r {
-        Value::F64(f) => assert!((f - 2.718).abs() < 1e-10),
+        Value::F64(f) => assert!((f - 2.75).abs() < 1e-10),
         other => panic!("expected F64, got {:?}", other),
     }
 
