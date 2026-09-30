@@ -6,6 +6,8 @@
 //! `synchronous` is FULL, an fsync on every commit. Applying them at connect
 //! time is the only way a pool gets them everywhere.
 
+mod common;
+
 use rbdc::db::{ConnectOptions, Connection, Driver};
 use rbdc_turso::{TursoConnectOptions, TursoDriver};
 use rbs::Value;
@@ -24,7 +26,7 @@ fn temp_db(tag: &str) -> (std::path::PathBuf, String) {
 
 /// First column of the first row, as an integer.
 async fn scalar(conn: &mut Box<dyn Connection>, sql: &str, params: Vec<Value>) -> i64 {
-    let mut rows = conn.get_rows(sql, params).await.expect("query");
+    let mut rows = common::get_rows(conn, sql, params).await.expect("query");
     let row = rows.first_mut().expect("query returns a row");
     row.get(0)
         .expect("query returns a column")

@@ -1,9 +1,10 @@
 //! Contention coverage for explicit read-modify-write transactions.
 //! Ensures writer admission happens before a transaction takes its read snapshot.
 
+mod common;
+
 use rbdc::db::{Connection, Driver};
 use rbdc_turso::TursoDriver;
-use rbs::Value;
 
 async fn connect(url: &str) -> Box<dyn Connection> {
     TursoDriver {}
@@ -23,8 +24,7 @@ async fn concurrent_explicit_transactions_converge() {
 
     {
         let mut setup = connect(&url).await;
-        setup
-            .get_rows("PRAGMA journal_mode=WAL", vec![])
+        common::get_rows(&mut setup, "PRAGMA journal_mode=WAL", vec![])
             .await
             .expect("enable WAL");
         setup
@@ -45,13 +45,13 @@ async fn concurrent_explicit_transactions_converge() {
             conn.begin()
                 .await
                 .map_err(|error| format!("writer {writer} failed to begin: {error}"))?;
-            let mut rows = conn
-                .get_rows(
-                    "SELECT COALESCE(MAX(seq), 0) + 1 AS seq FROM items WHERE room = 'r'",
-                    vec![],
-                )
-                .await
-                .map_err(|error| format!("writer {writer} failed to read: {error}"))?;
+            let mut rows = common::get_rows(
+                &mut conn,
+                "SELECT COALESCE(MAX(seq), 0) + 1 AS seq FROM items WHERE room = 'r'",
+                vec![],
+            )
+            .await
+            .map_err(|error| format!("writer {writer} failed to read: {error}"))?;
             let seq = rows
                 .first_mut()
                 .ok_or_else(|| format!("writer {writer} got no sequence row"))?
@@ -78,10 +78,13 @@ async fn concurrent_explicit_transactions_converge() {
     );
 
     let mut verify = connect(&url).await;
-    let rows = verify
-        .get_rows("SELECT seq FROM items WHERE room = 'r'", vec![])
-        .await
-        .expect("read inserted rows");
+    let rows = common::get_rows(
+        &mut verify,
+        "SELECT seq FROM items WHERE room = 'r'",
+        vec![],
+    )
+    .await
+    .expect("read inserted rows");
     assert_eq!(rows.len(), WRITERS);
 
     let _ = std::fs::remove_file(&path);

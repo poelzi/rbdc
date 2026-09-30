@@ -8,6 +8,8 @@
 //! autocommit retry, every writer converges on a distinct sequence and none
 //! fail.
 
+mod common;
+
 use rbdc::db::{Connection, Driver};
 use rbdc_turso::TursoDriver;
 
@@ -27,9 +29,8 @@ async fn concurrent_autocommit_inserts_converge() {
 
     {
         let mut setup = connect(&url).await;
-        // PRAGMA journal_mode returns a result row, so use get_rows, not exec.
-        setup
-            .get_rows("PRAGMA journal_mode=WAL", vec![])
+        // PRAGMA journal_mode returns a result row, so collect rows rather than exec.
+        common::get_rows(&mut setup, "PRAGMA journal_mode=WAL", vec![])
             .await
             .expect("enable WAL");
         setup
@@ -74,10 +75,13 @@ async fn concurrent_autocommit_inserts_converge() {
     // distinct (a duplicate would have surfaced as a non-retryable constraint
     // error above), so a row count of N proves every writer got its own slot.
     let mut verify = connect(&url).await;
-    let rows = verify
-        .get_rows("SELECT seq FROM items WHERE room = 'r'", vec![])
-        .await
-        .expect("count rows");
+    let rows = common::get_rows(
+        &mut verify,
+        "SELECT seq FROM items WHERE room = 'r'",
+        vec![],
+    )
+    .await
+    .expect("count rows");
     assert_eq!(
         rows.len(),
         N,
